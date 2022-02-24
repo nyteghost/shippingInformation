@@ -11,9 +11,9 @@ import sqlalchemy as sa
 import urllib
 import datetime
 from colorama import Fore, Back, Style
+from pprint import pprint as pp
 
 
-#Notes for updates
 
 # Loads config
 config = dk.tangerine()
@@ -26,11 +26,24 @@ params = urllib.parse.quote_plus("DRIVER={SQL Server Native Client 11.0};"
                                 'PWD='+(config['database']['PWD'])+';')
 
 conn = sa.create_engine("mssql+pyodbc:///?odbc_connect={}".format(params))
+### Notes Formatting ###
+assetship= """
+{shippingUsed} --- GCA-{asset} --- {STATUS}
+Model - {model}
+Shipped via {trackingNumber} on {shipDate} to {shipToInsert} at {address}{address2} {zip} {city} GA with historical UPS data showing as {shipmentStatus}."""
 
+noTracking = """
+--- GCA-{asset} ---
+Model - {model}
+No Tracking Information Found"""
+
+gopherLastUsed = """Assigned to {student} and last accessed on {recentSessions} by {mostRecentUser}"""
 Program_On = 1
 while Program_On == 1:
-    STID = input("Enter STID: ")
+    STID = input("Enter Student ID or Staff Username: ")
+    staff = 0
     if STID[0].isdigit() == False:
+        STAID = STID
         findStaffID_query = f"EXEC isolatedSafety.[dbo].[staffUserNameToStaffID] " +str(STID) # Checks Unreturned Equipment in SQL by STID
         findStaffID = pd.read_sql(findStaffID_query , conn)
         STID = findStaffID['Org_ID'].loc[0]
@@ -46,18 +59,7 @@ while Program_On == 1:
     print('\n')
 
 
-    ### Notes Formatting ###
-    assetship= """
-    {shippingUsed} --- GCA-{asset} --- {STATUS}
-    Model - {model}
-    Shipped via {trackingNumber} on {shipDate} to {shipToInsert} at {address}{address2} {zip} {city} GA with historical UPS data showing as {shipmentStatus}."""
 
-    noTracking = """
-    --- GCA-{asset} ---
-    Model - {model}
-    No Tracking Information Found"""
-
-    gopherLastUsed = """Assigned to {student} and last accessed on {recentSessions} by {mostRecentUser}"""
 
     ### Global Variables ###
     conversionDate = datetime.datetime(2020, 2, 5)
@@ -210,15 +212,29 @@ while Program_On == 1:
 
     print("\n\n\n")
     print(Fore.GREEN)
-    print('Shipping List Printout:')    
+    print('Shipping List Printout:')
+    print(Style.RESET_ALL)
+    if staff == 1:
+        print("Staff Username: ", STAID)
+    else:
+        print("Student ID: ", STID)
     print(Fore.CYAN)        
     print(*list_c, sep = "\n")
     print(Style.RESET_ALL)
     print("\n")
+     
+    
+    # pp(dict_a)
+    
+    # for k,v in dict_a.items():
+    #     print(k,'--')
+    #     pp(v)
 
     # for k,v in dict_a.items():
     #     print(k,'--')
     #     print(*v, sep = ", ")
+
+   
 
 
 
