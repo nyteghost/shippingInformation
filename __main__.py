@@ -9,7 +9,8 @@ import doorKey as dk
 from sqlalchemy import create_engine
 import sqlalchemy as sa
 import urllib
-import datetime
+import datetime 
+from datetime import date
 from colorama import Fore, Back, Style
 from pprint import pprint as pp
 
@@ -21,7 +22,7 @@ config = dk.tangerine()
 #Connects to SQL Database
 params = urllib.parse.quote_plus("DRIVER={SQL Server Native Client 11.0};"
                                 'Server='+(config['database']['Server'])+';'
-                                'Database=GCAAssetMGMT;'
+                                'Database=isolatedSafety;'
                                 'UID='+(config['database']['UID'])+';'
                                 'PWD='+(config['database']['PWD'])+';')
 
@@ -44,25 +45,25 @@ while Program_On == 1:
     staff = 0
     if STID[0].isdigit() == False:
         STAID = STID
-        findStaffID_query = f"EXEC isolatedSafety.[dbo].[staffUserNameToStaffID] " +str(STID) # Checks Unreturned Equipment in SQL by STID
+        findStaffID_query = f"EXEC [staffUserNameToStaffID] " +str(STID) # Checks Unreturned Equipment in SQL by STID
         findStaffID = pd.read_sql(findStaffID_query , conn)
         STID = findStaffID['Org_ID'].loc[0]
         staff = 1
-    if STID == 'X' or STID =='x':
-        exit()
+        if STAID == 'X' or STAID =='x':
+            exit()
     # STID = '1732590 '
 
     ### 176572 For testing when SCA is in name
     ### 2389755 For testing only showing delivered
     ### 2060437 Testing with Outstanding Equipment
-    ### 1732590 Causes Erorr
+    ### 1732590 
     print('\n')
 
 
 
 
     ### Global Variables ###
-    conversionDate = datetime.datetime(2020, 2, 5)
+    conversionDate = date(2020, 2, 5)
 
     ### Global Lists ###
     list_a = []
@@ -73,11 +74,11 @@ while Program_On == 1:
     dict_a = {}
 
     ### Beginning Queries ####
-    unreturned_query = f"EXEC IsolatedSafety.dbo.[uspFamUnreturnedDevCheck] " + STID # Checks Unreturned Equipment in SQL by STID
+    unreturned_query = f"EXEC [uspFamUnreturnedDevCheck] " + STID # Checks Unreturned Equipment in SQL by STID
     unreturned = pd.read_sql(unreturned_query , conn)
-    currentassetsquery = f"EXEC IsolatedSafety.[dbo].[uspFamCurrentAssignByOrgID] " + STID
+    currentassetsquery = f"EXEC [uspFamCurrentAssignByOrgID] " + STID
     currentassets = pd.read_sql(currentassetsquery , conn)
-    returnsquery = f"db_denydatawriter.uspReturnsUsingLabelsSent2Fam "+ STID
+    returnsquery = f"uspReturnsUsingLabelsSent2Fam "+ STID
     returnedAssets = pd.read_sql(returnsquery , conn)
     # familyLookUpquery = f"EXEC db_denydatawriter.uspFamilyLookUp " + STID
     # familyLookUp = pd.read_sql(familyLookUpquery , conn)
@@ -95,7 +96,7 @@ while Program_On == 1:
 
 
     def worldShipData(x,y,listingStatus):
-        worldShipQuery = f"ExEC GCAAssetMGMT.db_denydatawriter.uspWorldshipAssetLookup " +str(x)
+        worldShipQuery = f"ExEC uspWorldshipAssetLookup " +str(x)
         worldShip = pd.read_sql(worldShipQuery , conn)
         print("World Ship Before filling in Label_Method")
         print(worldShip)
@@ -120,7 +121,7 @@ while Program_On == 1:
             print(x)
             print("\n")
             shippingUsed = 'WorldShip'
-            assetshipprint = assetship.format(model = y,shippingUsed = shippingUsed,asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToAttention,shipDate=shipDate.date(),address=address,address2=address2,zip=zipCode, city=city,shipmentStatus='Delivered')
+            assetshipprint = assetship.format(model = y,shippingUsed = shippingUsed,asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToAttention,shipDate=shipDate,address=address,address2=address2,zip=zipCode, city=city,shipmentStatus='Delivered')
         print(assetshipprint)
         list_c.append(assetshipprint)
         list_e.append(assetshipprint)
@@ -129,7 +130,7 @@ while Program_On == 1:
 
 
     def upsData(x,y,listingStatus):
-        upsDataByAssetquery = f"EXEC db_denydatawriter.uspUPSDataByAssetNum " + str(x)
+        upsDataByAssetquery = f"uspUPSDataByAssetNum " + str(x)
         upsDataByAsset = pd.read_sql(upsDataByAssetquery , conn)
         upsDataByAsset = upsDataByAsset.loc[upsDataByAsset['Status'] == 'Delivered']
         upsDataByAsset['Ship To Address Line 2'] = upsDataByAsset['Ship To Address Line 2'].fillna("")
@@ -152,7 +153,7 @@ while Program_On == 1:
             city = upsDataByAsset['Ship To City'].loc[0]
             print("\n")
             shippingUsed = "UPS"
-            assetshipprint = assetship.format(model = y,shippingUsed=shippingUsed, asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToInsert,shipDate=shipDate.date(),address=address,address2=address2,zip="", city=city,shipmentStatus=shipmentStatus)
+            assetshipprint = assetship.format(model = y,shippingUsed=shippingUsed, asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToInsert,shipDate=shipDate,address=address,address2=address2,zip="", city=city,shipmentStatus=shipmentStatus)
             print(assetshipprint)
             list_c.append(assetshipprint)
             list_e.append(assetshipprint)
@@ -162,7 +163,7 @@ while Program_On == 1:
 
     def gopherData(x,y):
         if y in ('14e Chromebook', 'Chromebook 5400','Chromebook 3400'): 
-            gopherquery = f"EXEC db_denydatawriter.uspGophDataByAsset " + str(x) # Checks Gopher Data in SQL by STID
+            gopherquery = f"EXEC uspGophDataByAsset " + str(x) # Checks Gopher Data in SQL by STID
             gopher = pd.read_sql(gopherquery , conn)
             student = gopher['StudentID'].loc[0].strip() + ' ' + gopher['FirstName'].loc[0].strip()
             recentSessions = gopher['Recent Sessions'].loc[0]
@@ -177,7 +178,7 @@ while Program_On == 1:
             return gopherLastUsedprint
 
     def shipData(x,y,listingStatus):
-        upsDataByAssetquery = f"EXEC db_denydatawriter.uspUPSDataByAssetNum " + str(x)
+        upsDataByAssetquery = f"EXEC uspUPSDataByAssetNum " + str(x)
         upsDataByAsset = pd.read_sql(upsDataByAssetquery , conn)
         upsDataByAsset = upsDataByAsset.loc[upsDataByAsset['Status'] == 'Delivered']
         if not upsDataByAsset.empty:
