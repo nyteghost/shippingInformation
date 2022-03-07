@@ -13,7 +13,7 @@ import datetime
 from datetime import date
 from colorama import Fore, Back, Style
 from pprint import pprint as pp
-
+import re
 
 
 # Loads config
@@ -80,13 +80,19 @@ while Program_On == 1:
     currentassets = pd.read_sql(currentassetsquery , conn)
     returnsquery = f"uspReturnsUsingLabelsSent2Fam "+ STID
     returnedAssets = pd.read_sql(returnsquery , conn)
-    # familyLookUpquery = f"EXEC db_denydatawriter.uspFamilyLookUp " + STID
-    # familyLookUp = pd.read_sql(familyLookUpquery , conn)
+    familyLookUpquery = f"EXEC uspFamilyLookUp " + STID
+    familyLookUp = pd.read_sql(familyLookUpquery , conn)
 
-    # ### Generate list of student IDs in Family
-    # familySTIDS = familyLookUp['StudentID']
-    # for i in familySTIDS:
-    #     list_b.append(i)
+    ### Generate list of family members in Family
+    familyMembers = familyLookUp['FERPA_Contact']
+    
+    
+    
+    for i in familyMembers:
+        result = re.sub(r'[0-9]+', '', i)
+        list_b.append(result)
+
+ 
 
     ### Functions ###
 
@@ -98,6 +104,7 @@ while Program_On == 1:
     def worldShipData(x,y,listingStatus):
         worldShipQuery = f"ExEC uspWorldshipAssetLookup " +str(x)
         worldShip = pd.read_sql(worldShipQuery , conn)
+        worldShip['Contact'].isin(list_b)
         print("World Ship Before filling in Label_Method")
         print(worldShip)
         worldShip['Label_Method'] = worldShip['Label_Method'].fillna("SHIPMENT")
@@ -116,50 +123,61 @@ while Program_On == 1:
             address2 = worldShip['Address2'].loc[0]
             zipCode = worldShip['Zip'].loc[0]
             city = worldShip['City'].loc[0]
-            print("\n\n\n#################")
+            
             print("WorldShip Shipping Data")
             print(x)
             print("\n")
             shippingUsed = 'WorldShip'
+            if y == 'ST2000':
+                y = 'ST2000 Epson Printer'
             assetshipprint = assetship.format(model = y,shippingUsed = shippingUsed,asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToAttention,shipDate=shipDate,address=address,address2=address2,zip=zipCode, city=city,shipmentStatus='Delivered')
         print(assetshipprint)
         list_c.append(assetshipprint)
         list_e.append(assetshipprint)
-        print("\n\n\n#################")
+        
         return assetshipprint
-
+                
+                
 
     def upsData(x,y,listingStatus):
         upsDataByAssetquery = f"uspUPSDataByAssetNum " + str(x)
-        upsDataByAsset = pd.read_sql(upsDataByAssetquery , conn)
-        upsDataByAsset = upsDataByAsset.loc[upsDataByAsset['Status'] == 'Delivered']
-        upsDataByAsset['Ship To Address Line 2'] = upsDataByAsset['Ship To Address Line 2'].fillna("")
-        upsDataByAsset.reset_index(drop=True, inplace=True)
-        shipToName = upsDataByAsset['Ship To Name'].loc[0]
-        shipToAttention = upsDataByAsset['Ship To Attention'].loc[0]
-        shipDate = upsDataByAsset['Manifest Date'].loc[0]
-        if shipDate > conversionDate:
-            shipToInsert = shipToName
-        else:
-            shipToInsert = shipToAttention
-
-        if  shipToInsert != "SCA":
-            trackingNumber = upsDataByAsset['Tracking Number'].loc[0]
-            shipmentStatus = upsDataByAsset['Status'].loc[0]
-            shipDate = upsDataByAsset['Manifest Date'].loc[0]
-            shipToAttention = upsDataByAsset['Ship To Attention'].loc[0]
-            address = upsDataByAsset['Ship To Address Line 1'].loc[0]
-            address2 = upsDataByAsset['Ship To Address Line 2'].loc[0]
-            city = upsDataByAsset['Ship To City'].loc[0]
-            print("\n")
-            shippingUsed = "UPS"
-            assetshipprint = assetship.format(model = y,shippingUsed=shippingUsed, asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToInsert,shipDate=shipDate,address=address,address2=address2,zip="", city=city,shipmentStatus=shipmentStatus)
-            print(assetshipprint)
-            list_c.append(assetshipprint)
-            list_e.append(assetshipprint)
-            return assetshipprint
-        else:
+        upsDataByAssetdf = pd.read_sql(upsDataByAssetquery , conn)
+        # upsDataByAsset = upsDataByAssetdf['Ship To Attention'].isin(list_b)
+        # upsDataByAsset = upsDataByAsset.reset_index(drop=True)
+        upsDataByAsset = upsDataByAssetdf.loc[upsDataByAssetdf['Status'] == 'Delivered']
+            
+        if upsDataByAsset['Ship To Attention'].isin(list_b).all() == False and upsDataByAsset['Ship To Name'].isin(list_b).all() == False:
             worldShipData(x,y,listingStatus)
+            print('Skipping UPS check due to not being found in Ship to Attention or Ship to Name')
+        else:
+            shipDate = upsDataByAsset['Manifest Date'].loc[0]
+            upsDataByAsset['Ship To Address Line 2'] = upsDataByAsset['Ship To Address Line 2'].fillna("")
+            upsDataByAsset = upsDataByAsset.reset_index(drop=True)
+            shipToInsert = upsDataByAsset['Ship To Attention'].loc[0]
+            print(shipDate)
+            if shipDate > datetime.date(2020,1,29):
+                worldShipData(x,y,listingStatus)
+                print('Skipping due WorldShip being implemented at this time.')   
+            else:
+                if  shipToInsert != "SCA":
+                    trackingNumber = upsDataByAsset['Tracking Number'].loc[0]
+                    shipmentStatus = upsDataByAsset['Status'].loc[0]
+                    shipDate = upsDataByAsset['Manifest Date'].loc[0]
+                    shipToInsert = upsDataByAsset['Ship To Attention'].loc[0]
+                    address = upsDataByAsset['Ship To Address Line 1'].loc[0]
+                    address2 = upsDataByAsset['Ship To Address Line 2'].loc[0]
+                    city = upsDataByAsset['Ship To City'].loc[0]
+                    print("\n")
+                    shippingUsed = "UPS"
+                    if y == 'ST2000':
+                        y = 'ST2000 Epson Printer'
+                    assetshipprint = assetship.format(model = y,shippingUsed=shippingUsed, asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToInsert,shipDate=shipDate,address=address,address2=address2,zip="", city=city,shipmentStatus=shipmentStatus)
+                    print(assetshipprint)
+                    list_c.append(assetshipprint)
+                    list_e.append(assetshipprint)
+                    return assetshipprint
+                else:
+                    worldShipData(x,y,listingStatus)
 
     def gopherData(x,y):
         if y in ('14e Chromebook', 'Chromebook 5400','Chromebook 3400'): 
@@ -197,18 +215,23 @@ while Program_On == 1:
             list_e = []
             listingStatus = "Outstanding Asset"
             list_a.append(x)
+            print("\n\n#################\n\n")
             shipData(x,y,listingStatus)
+            print("\n\n#################\n\n")
             dict_a[x] = [list_e]
             
                 
     ### Current Assets Search ###
+    
     print("Current assets are as followed.")
     print(currentassets)
+    print("\n\n#################\n\n")
     for x,y,z in zip(currentassets['AssetID'], currentassets['Model_Number'], currentassets['Assignment_Timestamp']):
         list_e = []
         listingStatus = ""
         if x not in list_a:
             shipData(x,y,listingStatus)
+            print("\n\n#################\n\n")
             dict_a[x] = [list_e]
 
     print("\n\n\n")
