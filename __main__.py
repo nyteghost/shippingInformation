@@ -1,3 +1,4 @@
+from select import select
 import pandas as pd
 import pyodbc
 import sys
@@ -14,7 +15,7 @@ from datetime import date
 from colorama import Fore, Back, Style
 from pprint import pprint as pp
 import re
-
+import math
 
 # Loads config
 config = dk.tangerine()
@@ -68,7 +69,9 @@ while Program_On == 1:
     ### Global Lists ###
     list_a = []
     list_b = []
+    list_b2=[]
     list_c = []
+   
 
     ### Global Dictionary ###
     dict_a = {}
@@ -86,13 +89,38 @@ while Program_On == 1:
     ### Generate list of family members in Family
     familyMembers = familyLookUp['FERPA_Contact']
     
+    studentFirstName = familyLookUp['FirstName']
+    studentLastName = familyLookUp['LastName']
+    studentFnLn = studentFirstName+" "+studentLastName
+    studentLnFn = studentLastName+" "+studentFirstName
     
+    parentFirstName = familyLookUp['LG_FirstName']
+    parentLastName = familyLookUp['LG_LastName']
+    parentFnLn = parentFirstName+" "+parentLastName
+    parentLnFn = parentLastName+" "+parentFirstName
     
     for i in familyMembers:
         result = re.sub(r'[0-9]+', '', i)
+        result = result.upper()
         list_b.append(result)
+    
+    for i in parentFnLn:
+        if type(i)== str:
+            list_b.append(i.upper())
+    for i in parentLnFn:
+        if type(i)== str:
+            list_b.append(i.upper())
 
- 
+    for i in studentFnLn:
+        if type(i)== str:
+            list_b.append(i.upper())
+    for i in studentLnFn:
+        if type(i)== str:
+            list_b.append(i.upper())
+    for i in parentLastName:
+        if type(i)== str:
+            list_b.append(i.upper())
+
 
     ### Functions ###
 
@@ -108,6 +136,7 @@ while Program_On == 1:
         print("World Ship Before filling in Label_Method")
         print(worldShip)
         worldShip['Label_Method'] = worldShip['Label_Method'].fillna("SHIPMENT")
+        print(worldShip)
         worldShip['Address2'] = worldShip['Address2'].fillna("")
         worldShip = worldShip.loc[worldShip['Label_Method'] == 'SHIPMENT']
         worldShip.reset_index(drop=True, inplace=True)
@@ -118,7 +147,10 @@ while Program_On == 1:
         else:
             trackingNumber = worldShip['TrackingNumber'].loc[0]
             shipDate = worldShip['Date'].loc[0]
+            shipToContact = worldShip['Contact'].loc[0]
             shipToAttention = worldShip['Attn'].loc[0]
+            if worldShip['Attn'].str.contains('STUDENT - GEORGIA CYBER').any():
+                shipToAttention=shipToContact
             address = worldShip['Address'].loc[0]
             address2 = worldShip['Address2'].loc[0]
             zipCode = worldShip['Zip'].loc[0]
@@ -145,16 +177,27 @@ while Program_On == 1:
         # upsDataByAsset = upsDataByAssetdf['Ship To Attention'].isin(list_b)
         # upsDataByAsset = upsDataByAsset.reset_index(drop=True)
         upsDataByAsset = upsDataByAssetdf.loc[upsDataByAssetdf['Status'] == 'Delivered']
-            
-        if upsDataByAsset['Ship To Attention'].isin(list_b).all() == False and upsDataByAsset['Ship To Name'].isin(list_b).all() == False:
-            worldShipData(x,y,listingStatus)
-            print('Skipping UPS check due to not being found in Ship to Attention or Ship to Name')
-        else:
+        print('********************************************')
+        print(x)
+        print(list_b)
+        print(upsDataByAsset['Ship To Attention'])
+        print(upsDataByAsset['Ship To Name'])
+        print('********************************************')
+        pattern = '|'.join(list_b)
+        print(upsDataByAsset)
+        if upsDataByAsset['Ship To Attention'].str.contains(pattern).any() | upsDataByAsset['Ship To Name'].str.contains(pattern).any():
+            upsDataByAsset.reset_index(drop=True, inplace=True)
+            shipToInsert = upsDataByAsset['Ship To Attention'].loc[0]
+            print("SHIP TO INSERT: ", shipToInsert)
+            if shipToInsert == "SOUTHEASTERN COMPUTER ASSOCIATES":
+                upsDataByAsset = upsDataByAsset.loc[upsDataByAsset['Ship To Attention'] != 'SOUTHEASTERN COMPUTER ASSOCIATES']
+                upsDataByAsset = upsDataByAsset.reset_index(drop=True)
+            print(upsDataByAsset)
             shipDate = upsDataByAsset['Manifest Date'].loc[0]
             upsDataByAsset['Ship To Address Line 2'] = upsDataByAsset['Ship To Address Line 2'].fillna("")
             upsDataByAsset = upsDataByAsset.reset_index(drop=True)
-            shipToInsert = upsDataByAsset['Ship To Attention'].loc[0]
             print(shipDate)
+
             if shipDate > datetime.date(2020,1,29):
                 worldShipData(x,y,listingStatus)
                 print('Skipping due WorldShip being implemented at this time.')   
@@ -178,6 +221,61 @@ while Program_On == 1:
                     return assetshipprint
                 else:
                     worldShipData(x,y,listingStatus)
+        else:
+            print(list_b)
+            worldShipData(x,y,listingStatus)
+            print('Skipping UPS check due to not being found in Ship to Attention or Ship to Name')
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        # # if upsDataByAsset['Ship To Attention'].isin(list_b).any() == False and upsDataByAsset['Ship To Name'].isin(list_b).any() == False:
+        #     print(list_b)
+        #     worldShipData(x,y,listingStatus)
+        #     print('Skipping UPS check due to not being found in Ship to Attention or Ship to Name')
+        # else:
+        #     # upsDataByAsset = upsDataByAsset.loc[upsDataByAsset['Ship To Attention'] != 'SOUTHEASTERN COMPUTER ASSOCIATES']
+        #     upsDataByAsset.reset_index(drop=True, inplace=True)
+        #     shipToInsert = upsDataByAsset['Ship To Attention'].loc[0]
+        #     print("SHIP TO INSERT: ", shipToInsert)
+        #     if shipToInsert == "SOUTHEASTERN COMPUTER ASSOCIATES":
+        #         upsDataByAsset = upsDataByAsset.loc[upsDataByAsset['Ship To Attention'] != 'SOUTHEASTERN COMPUTER ASSOCIATES']
+        #         upsDataByAsset = upsDataByAsset.reset_index(drop=True)
+        #     print(upsDataByAsset)
+        #     shipDate = upsDataByAsset['Manifest Date'].loc[0]
+        #     upsDataByAsset['Ship To Address Line 2'] = upsDataByAsset['Ship To Address Line 2'].fillna("")
+        #     upsDataByAsset = upsDataByAsset.reset_index(drop=True)
+        #     print(shipDate)
+
+        #     if shipDate > datetime.date(2020,1,29):
+        #         worldShipData(x,y,listingStatus)
+        #         print('Skipping due WorldShip being implemented at this time.')   
+        #     else:
+        #         if  shipToInsert != "SCA":
+        #             trackingNumber = upsDataByAsset['Tracking Number'].loc[0]
+        #             shipmentStatus = upsDataByAsset['Status'].loc[0]
+        #             shipDate = upsDataByAsset['Manifest Date'].loc[0]
+        #             shipToInsert = upsDataByAsset['Ship To Attention'].loc[0]
+        #             address = upsDataByAsset['Ship To Address Line 1'].loc[0]
+        #             address2 = upsDataByAsset['Ship To Address Line 2'].loc[0]
+        #             city = upsDataByAsset['Ship To City'].loc[0]
+        #             print("\n")
+        #             shippingUsed = "UPS"
+        #             if y == 'ST2000':
+        #                 y = 'ST2000 Epson Printer'
+        #             assetshipprint = assetship.format(model = y,shippingUsed=shippingUsed, asset=x,STATUS = listingStatus,trackingNumber=trackingNumber,shipToInsert=shipToInsert,shipDate=shipDate,address=address,address2=address2,zip="", city=city,shipmentStatus=shipmentStatus)
+        #             print(assetshipprint)
+        #             list_c.append(assetshipprint)
+        #             list_e.append(assetshipprint)
+        #             return assetshipprint
+        #         else:
+        #             worldShipData(x,y,listingStatus)
 
     def gopherData(x,y):
         if y in ('14e Chromebook', 'Chromebook 5400','Chromebook 3400'): 
@@ -247,7 +345,19 @@ while Program_On == 1:
     print(Style.RESET_ALL)
     print("\n")
      
-    
+    if not returnedAssets.empty:
+        selected_rows = returnedAssets[returnedAssets['Last_Assigned_Contact'].isnull()] 
+        selected_rows = selected_rows.loc[selected_rows['AssetID'] == 0]
+        selected_rows = selected_rows.reset_index()
+
+        for index, row in selected_rows.iterrows():
+            model = row['Model_Number']
+            return_date = row['Assignment_Timestamp']
+            
+            tracking = row['Tracking']
+            print(Fore.YELLOW)
+            print(f"This family returned items that were not part of GCA inventory. a {model} was returned on {return_date.date()} via tracking number {tracking}.")
+            print(Style.RESET_ALL)
     # pp(dict_a)
     
     # for k,v in dict_a.items():
